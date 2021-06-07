@@ -51,6 +51,6 @@ mod tests {
         let meta = Meta::new()?;
 
         println!("{:#?}", meta);
-        panic!();
+        Ok(())
     }
 }
