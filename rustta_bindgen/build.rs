@@ -13,7 +13,7 @@ fn main() {
         .rustified_enum(".*")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
-        .expect("Unabled to generate bindings");
+        .expect("Unable to generate bindings");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings

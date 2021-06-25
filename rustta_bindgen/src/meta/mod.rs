@@ -15,7 +15,7 @@ pub mod params;
 
 #[derive(Debug)]
 pub struct Meta {
-    data: HashMap<String, HashMap<String, FuncInfo>>,
+    pub data: HashMap<String, Vec<FuncInfo>>,
 }
 
 impl Meta {
@@ -24,13 +24,13 @@ impl Meta {
         let group_table = GroupTable::new()?;
 
         for group in group_table.iter() {
-            let mut func_data = HashMap::new();
+            let mut func_data = Vec::new();
             let func_table = FuncTable::new(group)?;
 
             for func in func_table.iter() {
                 let handle = FuncHandle::new(func)?;
                 let info = FuncInfo::try_from(handle)?;
-                func_data.insert(func.to_string_lossy().into_owned(), info);
+                func_data.push(info);
             }
 
             data.insert(group.to_string_lossy().into_owned(), func_data);
@@ -44,13 +44,25 @@ impl Meta {
 mod tests {
     use std::error::Error;
 
+    use crate::meta::params::input::InputType;
+
     use super::*;
 
     #[test]
     fn test_meta() -> Result<(), Box<dyn Error>> {
         let meta = Meta::new()?;
 
-        println!("{:#?}", meta);
+        for (_group, indicators) in meta.data.iter() {
+            for indicator in indicators.iter() {
+                for input in indicator.inputs() {
+                    if !input.flags().is_empty() && input.param_type() != InputType::Price {
+                        println!("{:#?}", input)
+                    }
+                }
+            }
+        }
+
+        panic!();
         Ok(())
     }
 }

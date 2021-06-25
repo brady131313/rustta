@@ -5,6 +5,11 @@ authors = ["Brady <bradypierce@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 rustta_bindgen = { path = "rustta_bindgen" }
+derive_builder = "0.10.2"
+
+[build-dependencies]
+rustta_bindgen = { path = "rustta_bindgen" }
+quote = "1.0"
+proc-macro2 = "1.0"
