@@ -54,15 +54,11 @@ mod tests {
 
         for (_group, indicators) in meta.data.iter() {
             for indicator in indicators.iter() {
-                for input in indicator.inputs() {
-                    if !input.flags().is_empty() && input.param_type() != InputType::Price {
-                        println!("{:#?}", input)
-                    }
-                }
+                println!("{:#?}", indicator);
             }
         }
 
-        panic!();
+        //panic!();
         Ok(())
     }
 }

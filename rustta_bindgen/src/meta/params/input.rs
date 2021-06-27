@@ -26,17 +26,23 @@ impl From<TA_InputParameterType> for InputType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Input {
     name: String,
+    position: usize,
     param_type: InputType,
     flags: InputFlags,
 }
 
 impl Input {
-    pub fn new(name: String, param_type: InputType, flags: InputFlags) -> Self {
+    pub fn new(name: String, position: usize, param_type: InputType, flags: InputFlags) -> Self {
         Self {
             name,
+            position,
             param_type,
             flags,
         }
+    }
+
+    pub fn position(&self) -> usize {
+        self.position
     }
 
     pub fn name(&self) -> &str {
@@ -56,9 +62,10 @@ impl TryFrom<(&FuncHandle, usize)> for Input {
     type Error = TaError;
 
     fn try_from(handle: (&FuncHandle, usize)) -> Result<Self, Self::Error> {
+        let position = handle.1;
         let mut param_ptr = std::ptr::null();
         let ret_code =
-            unsafe { TA_GetInputParameterInfo(**(handle.0), handle.1 as u32, &mut param_ptr) };
+            unsafe { TA_GetInputParameterInfo(**(handle.0), position as u32, &mut param_ptr) };
 
         if ret_code != TA_RetCode::TA_SUCCESS {
             return Err(ret_code.into());
@@ -75,6 +82,7 @@ impl TryFrom<(&FuncHandle, usize)> for Input {
 
         Ok(Self {
             name,
+            position,
             param_type,
             flags,
         })

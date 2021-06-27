@@ -24,14 +24,16 @@ impl From<TA_OutputParameterType> for OutputType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     name: String,
+    position: usize,
     param_type: OutputType,
     flags: OutputFlags,
 }
 
 impl Output {
-    pub fn new(name: String, param_type: OutputType, flags: OutputFlags) -> Self {
+    pub fn new(name: String, position: usize, param_type: OutputType, flags: OutputFlags) -> Self {
         Self {
             name,
+            position,
             param_type,
             flags,
         }
@@ -54,9 +56,10 @@ impl TryFrom<(&FuncHandle, usize)> for Output {
     type Error = TaError;
 
     fn try_from(handle: (&FuncHandle, usize)) -> Result<Self, Self::Error> {
+        let position = handle.1;
         let mut param_ptr = std::ptr::null();
         let ret_code =
-            unsafe { TA_GetOutputParameterInfo(**(handle.0), handle.1 as u32, &mut param_ptr) };
+            unsafe { TA_GetOutputParameterInfo(**(handle.0), position as u32, &mut param_ptr) };
 
         if ret_code != TA_RetCode::TA_SUCCESS {
             return Err(ret_code.into());
@@ -73,6 +76,7 @@ impl TryFrom<(&FuncHandle, usize)> for Output {
 
         Ok(Self {
             name,
+            position,
             param_type,
             flags,
         })

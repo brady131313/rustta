@@ -26,6 +26,7 @@ impl From<TA_OptInputParameterType> for OptInputType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptInput {
     name: String,
+    position: usize,
     param_type: OptInputType,
     display_name: String,
     default: f64,
@@ -36,6 +37,7 @@ pub struct OptInput {
 impl OptInput {
     pub fn new(
         name: String,
+        position: usize,
         param_type: OptInputType,
         display_name: String,
         default: f64,
@@ -44,6 +46,7 @@ impl OptInput {
     ) -> Self {
         Self {
             name,
+            position,
             param_type,
             display_name,
             default,
@@ -54,6 +57,10 @@ impl OptInput {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn position(&self) -> usize {
+        self.position
     }
 
     pub fn param_type(&self) -> OptInputType {
@@ -81,9 +88,10 @@ impl TryFrom<(&FuncHandle, usize)> for OptInput {
     type Error = TaError;
 
     fn try_from(handle: (&FuncHandle, usize)) -> Result<Self, Self::Error> {
+        let position = handle.1;
         let mut param_ptr = std::ptr::null();
         let ret_code =
-            unsafe { TA_GetOptInputParameterInfo(**(handle.0), handle.1 as u32, &mut param_ptr) };
+            unsafe { TA_GetOptInputParameterInfo(**(handle.0), position as u32, &mut param_ptr) };
 
         if ret_code != TA_RetCode::TA_SUCCESS {
             return Err(ret_code.into());
@@ -113,6 +121,7 @@ impl TryFrom<(&FuncHandle, usize)> for OptInput {
 
         Ok(Self {
             name,
+            position,
             param_type,
             display_name,
             default,

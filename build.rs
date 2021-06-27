@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use rustta_bindgen::meta::{
     func_info::FuncInfo,
     params::{
-        input::{Input, InputType},
+        input::{Input, InputFlags, InputType},
         opt_input::OptInputType,
     },
     Meta,
@@ -15,7 +15,6 @@ fn main() {
     let meta = Meta::new().unwrap();
     let indicator_modules = generate_indicator_modules(&meta);
     let code = indicator_modules.to_string();
-    println!("{}", code);
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     fs::write(out_path.join("indicators.rs"), code).expect("Coundn't write indicators");
@@ -35,6 +34,9 @@ fn generate_indicator_modules(meta: &Meta) -> TokenStream {
             pub mod #group_ident {
                 use std::{ffi::CString, error::Error, convert::TryFrom};
                 use rustta_bindgen::meta::func_handle::FuncHandle;
+                use rustta_bindgen::meta::params::param_holder::{
+                    Open, Low, High, Close, Volume, OpenInterest, ParamHolder, OptInputParam, InputParam, Ohlc, Length
+                };
 
                 #(#func_structs)*
             }
@@ -42,6 +44,7 @@ fn generate_indicator_modules(meta: &Meta) -> TokenStream {
     }
 
     quote! {
+
         #(#group_modules)*
     }
 }
@@ -76,7 +79,7 @@ fn generate_indicator_struct_members(indicator: &FuncInfo) -> Vec<TokenStream> {
 
         let member_type = match param.param_type() {
             OptInputType::Integer => "i32",
-            OptInputType::Real => "f32",
+            OptInputType::Real => "f64",
         };
         let member_type_ident = format_ident!("{}", member_type);
 
@@ -99,13 +102,115 @@ fn generate_indicator_struct_members(indicator: &FuncInfo) -> Vec<TokenStream> {
 
 fn generate_indicator_calculate_func(indicator: &FuncInfo) -> TokenStream {
     let (func_input_bounds, func_inputs) = generate_calculate_inputs(indicator);
+    let opt_input_params = generate_opt_input_params(indicator);
+    let input_params = generate_input_params(indicator);
+    let input_length = generate_input_length(indicator);
 
     quote! {
-        pub fn calculate<#(#func_input_bounds),*>(&self, #(#func_inputs),*) -> Result<(), Box<dyn Error>> {
+        pub fn calculate<#(#func_input_bounds),*>(&self, #(#func_inputs),*) -> Result<usize, Box<dyn Error>> {
             let handle = FuncHandle::try_from(Self::ID)?;
-            Ok(())
+            let mut params = ParamHolder::try_from(handle)?;
+
+            #(#opt_input_params)*
+            #(#input_params)*
+
+            #input_length
+            let output_size = params.required_output_size(0, input_len)
+                .ok_or("Failed to get required size")?;
+
+            Ok(output_size)
         }
     }
+}
+
+fn generate_opt_input_params(indicator: &FuncInfo) -> Vec<TokenStream> {
+    let mut params = Vec::new();
+
+    for param in indicator.params() {
+        let position = param.position();
+        let param_ident = format_ident!("{}", rustify_name(param.display_name()));
+
+        let param_type_ident = match param.param_type() {
+            OptInputType::Real => quote! { Real },
+            OptInputType::Integer => quote! { Integer },
+        };
+
+        params.push(quote! {
+            params.set_param(#position, OptInputParam::#param_type_ident(self.#param_ident))?;
+        });
+    }
+
+    params
+}
+
+fn generate_input_params(indicator: &FuncInfo) -> Vec<TokenStream> {
+    let mut inputs = Vec::new();
+
+    for input in indicator.inputs() {
+        let position = input.position();
+        let input_ident = format_ident!("{}", rustify_input(input.name()));
+
+        let input_value = match input.param_type() {
+            InputType::Integer | InputType::Real => quote! { #input_ident.as_ref() },
+            InputType::Price => {
+                let flags = input.flags();
+
+                let open = if flags.contains(InputFlags::OPEN) {
+                    quote! { #input_ident.open() }
+                } else {
+                    quote! { &[] }
+                };
+                let low = if flags.contains(InputFlags::LOW) {
+                    quote! { #input_ident.low() }
+                } else {
+                    quote! { &[] }
+                };
+                let high = if flags.contains(InputFlags::HIGH) {
+                    quote! { #input_ident.high() }
+                } else {
+                    quote! { &[] }
+                };
+                let close = if flags.contains(InputFlags::CLOSE) {
+                    quote! { #input_ident.close() }
+                } else {
+                    quote! { &[] }
+                };
+                let volume = if flags.contains(InputFlags::VOLUME) {
+                    quote! { #input_ident.volume() }
+                } else {
+                    quote! { &[] }
+                };
+                let open_interest = if flags.contains(InputFlags::OPEN_INTEREST) {
+                    quote! { #input_ident.open_interest() }
+                } else {
+                    quote! { &[] }
+                };
+
+                quote! {
+                    Ohlc {
+                        open: #open,
+                        low: #low,
+                        high: #high,
+                        close: #close,
+                        volume: #volume,
+                        openinterest: #open_interest
+                    }
+                }
+            }
+        };
+
+        let input_type_ident = match input.param_type() {
+            InputType::Real => quote! { Real },
+            InputType::Integer => quote! { Integer },
+            InputType::Price => quote! { Ohlc },
+        };
+
+        inputs.push(quote! {
+            params.set_input(#position, InputParam::#input_type_ident(#input_value))?;
+        })
+    }
+
+    inputs
 }
 
 fn generate_calculate_inputs(indicator: &FuncInfo) -> (Vec<TokenStream>, Vec<TokenStream>) {
@@ -119,17 +224,54 @@ fn generate_calculate_inputs(indicator: &FuncInfo) -> (Vec<TokenStream>, Vec<Tok
         let input_type = generate_input_type(input);
 
         inputs.push(quote! { #input_ident: #input_bound });
-        bounds.push(quote! { #input_bound: AsRef<#input_type> });
+        bounds.push(quote! { #input_bound: Length + #input_type });
     }
 
     (bounds, inputs)
 }
 
+fn generate_input_length(indicator: &FuncInfo) -> TokenStream {
+    let mut inputs = Vec::new();
+
+    for input in indicator.inputs() {
+        let input_ident = format_ident!("{}", rustify_input(input.name()));
+        inputs.push(input_ident);
+    }
+
+    quote! {
+        let input_len = max!(#(#inputs.length()),*) as i32;
+    }
+}
+
 fn generate_input_type(input: &Input) -> TokenStream {
     match input.param_type() {
-        InputType::Integer => quote! { [i32] },
-        InputType::Real => quote! { [f32] },
-        InputType::Price => quote! { [f32] },
+        InputType::Integer => quote! { AsRef<[i32]> },
+        InputType::Real => quote! { AsRef<[f64]> },
+        InputType::Price => {
+            let flags = input.flags();
+            let mut bounds = Vec::new();
+
+            if flags.contains(InputFlags::OPEN) {
+                bounds.push(quote! { Open })
+            }
+            if flags.contains(InputFlags::LOW) {
+                bounds.push(quote! { Low })
+            }
+            if flags.contains(InputFlags::HIGH) {
+                bounds.push(quote! { High })
+            }
+            if flags.contains(InputFlags::CLOSE) {
+                bounds.push(quote! { Close })
+            }
+            if flags.contains(InputFlags::VOLUME) {
+                bounds.push(quote! { Volume })
+            }
+            if flags.contains(InputFlags::OPEN_INTEREST) {
+                bounds.push(quote! { OpenInterest })
+            }
+
+            quote! { #(#bounds)+* }
+        }
     }
 }
 

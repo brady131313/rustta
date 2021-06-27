@@ -146,7 +146,12 @@ mod tests {
         assert_eq!(inputs.len(), 1);
         assert_eq!(
             inputs[0],
-            Input::new(String::from("inReal"), InputType::Real, InputFlags::empty())
+            Input::new(
+                String::from("inReal"),
+                0,
+                InputType::Real,
+                InputFlags::empty()
+            )
         );
 
         let params = info.params();
@@ -155,6 +160,7 @@ mod tests {
             params[0],
             OptInput::new(
                 String::from("optInTimePeriod"),
+                0,
                 OptInputType::Integer,
                 String::from("Time Period"),
                 5.0,
@@ -169,6 +175,7 @@ mod tests {
             outputs[0],
             Output::new(
                 String::from("outRealUpperBand"),
+                0,
                 OutputType::Real,
                 OutputFlags::UPPER_LIMIT
             )
