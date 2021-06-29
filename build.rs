@@ -7,6 +7,7 @@ use rustta_bindgen::meta::{
     params::{
         input::{Input, InputFlags, InputType},
         opt_input::OptInputType,
+        output::{Output, OutputType},
     },
     Meta,
 };
@@ -35,7 +36,8 @@ fn generate_indicator_modules(meta: &Meta) -> TokenStream {
                 use std::{ffi::CString, error::Error, convert::TryFrom};
                 use rustta_bindgen::meta::func_handle::FuncHandle;
                 use rustta_bindgen::meta::params::param_holder::{
-                    Open, Low, High, Close, Volume, OpenInterest, ParamHolder, OptInputParam, InputParam, Ohlc, Length
+                    Open, Low, High, Close, Volume, OpenInterest, ParamHolder,
+                    OptInputParam, InputParam, OutputParam, Ohlc, Length
                 };
 
                 #(#func_structs)*
@@ -44,7 +46,6 @@ fn generate_indicator_modules(meta: &Meta) -> TokenStream {
     }
 
     quote! {
-
         #(#group_modules)*
     }
 }
@@ -105,9 +106,12 @@ fn generate_indicator_calculate_func(indicator: &FuncInfo) -> TokenStream {
     let opt_input_params = generate_opt_input_params(indicator);
     let input_params = generate_input_params(indicator);
     let input_length = generate_input_length(indicator);
+    let func_outputs = generate_calculate_outputs(indicator);
+    let output_params = generate_output_params(indicator);
+    let call_and_return = generate_call_and_return(indicator);
 
     quote! {
-        pub fn calculate<#(#func_input_bounds),*>(&self, #(#func_inputs),*) -> Result<usize, Box<dyn Error>> {
+        pub fn calculate<#(#func_input_bounds),*>(&self, #(#func_inputs),*) -> Result<#func_outputs, Box<dyn Error>> {
             let handle = FuncHandle::try_from(Self::ID)?;
             let mut params = ParamHolder::try_from(handle)?;
 
@@ -117,8 +121,11 @@ fn generate_indicator_calculate_func(indicator: &FuncInfo) -> TokenStream {
             #input_length
             let output_size = params.required_output_size(0, input_len)
                 .ok_or("Failed to get required size")?;
+            dbg!(output_size);
 
-            Ok(output_size)
+            #(#output_params)*
+
+            #call_and_return
         }
     }
 }
@@ -213,6 +220,28 @@ fn generate_input_params(indicator: &FuncInfo) -> Vec<TokenStream> {
     inputs
 }
 
+fn generate_output_params(indicator: &FuncInfo) -> Vec<TokenStream> {
+    let mut outputs = Vec::new();
+
+    for output in indicator.outputs() {
+        let position = output.position();
+        let output_ident = format_ident!("{}", rustify_input(output.name()));
+
+        let (output_type_ident, output_vec_init) = match output.param_type() {
+            OutputType::Real => (quote! { Real }, quote! { 0.0 }),
+            OutputType::Integer => (quote! { Integer }, quote! { 0 }),
+        };
+
+        outputs.push(quote! {
+            let mut #output_ident = vec![#output_vec_init; output_size];
+
+            params.set_output(#position, OutputParam::#output_type_ident(&mut #output_ident))?;
+        })
+    }
+
+    outputs
+}
+
 fn generate_calculate_inputs(indicator: &FuncInfo) -> (Vec<TokenStream>, Vec<TokenStream>) {
     let letters = 'A'..'Z';
     let mut inputs = Vec::new();
@@ -230,6 +259,23 @@ fn generate_calculate_inputs(indicator: &FuncInfo) -> (Vec<TokenStream>, Vec<Tok
     (bounds, inputs)
 }
 
+fn generate_calculate_outputs(indicator: &FuncInfo) -> TokenStream {
+    let mut outputs = Vec::new();
+
+    for output in indicator.outputs() {
+        let output_type = generate_output_type(output);
+
+        outputs.push(output_type)
+    }
+
+    // More than one output, wrap in tuple
+    if outputs.len() > 1 {
+        quote! { (#(#outputs),*) }
+    } else {
+        quote! { #(#outputs)* }
+    }
+}
+
 fn generate_input_length(indicator: &FuncInfo) -> TokenStream {
     let mut inputs = Vec::new();
 
@@ -240,6 +286,28 @@ fn generate_input_length(indicator: &FuncInfo) -> TokenStream {
 
     quote! {
         let input_len = max!(#(#inputs.length()),*) as i32;
+        let end_idx = (min!(#(#inputs.length()),*) - 1) as i32;
+    }
+}
+
+fn generate_call_and_return(indicator: &FuncInfo) -> TokenStream {
+    let mut outputs = Vec::new();
+
+    for output in indicator.outputs() {
+        let output_ident = format_ident!("{}", rustify_input(output.name()));
+        outputs.push(quote! { #output_ident })
+    }
+
+    // More than one output wrap in tuple
+    let return_expr = if outputs.len() > 1 {
+        quote! { Ok((#(#outputs),*)) }
+    } else {
+        quote! { Ok(#(#outputs)*) }
+    };
+
+    quote! {
+        params.call(0, end_idx)?;
+        #return_expr
     }
 }
 
@@ -272,6 +340,13 @@ fn generate_input_type(input: &Input) -> TokenStream {
 
             quote! { #(#bounds)+* }
         }
+    }
+}
+
+fn generate_output_type(output: &Output) -> TokenStream {
+    match output.param_type() {
+        OutputType::Integer => quote! { Vec<i32> },
+        OutputType::Real => quote! { Vec<f64> },
     }
 }
 

@@ -215,7 +215,19 @@ impl ParamHolder {
         if temp > end {
             Some(0)
         } else {
-            Some(end - temp + 1)
+            Some(end - temp)
+        }
+    }
+
+    pub fn call(&self, start: i32, end: i32) -> TaResult<()> {
+        let begin_idx_ptr: *mut i32 = &mut 0;
+        let num_elements_ptr: *mut i32 = &mut 0;
+
+        let ret_code = unsafe { TA_CallFunc(self.0, start, end, begin_idx_ptr, num_elements_ptr) };
+
+        match ret_code {
+            TA_RetCode::TA_SUCCESS => Ok(()),
+            _ => Err(TaError::Misc("Error calling func".into())),
         }
     }
 }

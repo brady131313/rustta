@@ -43,6 +43,10 @@ impl Output {
         &self.name
     }
 
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
     pub fn param_type(&self) -> OutputType {
         self.param_type
     }

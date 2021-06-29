@@ -44,7 +44,7 @@ impl Meta {
 mod tests {
     use std::error::Error;
 
-    use crate::meta::params::input::InputType;
+    use crate::meta::params::{input::InputType, output::OutputType};
 
     use super::*;
 
@@ -54,11 +54,15 @@ mod tests {
 
         for (_group, indicators) in meta.data.iter() {
             for indicator in indicators.iter() {
-                println!("{:#?}", indicator);
+                for output in indicator.outputs() {
+                    if output.param_type() != OutputType::Real {
+                        println!("{:#?}", indicator);
+                    }
+                }
             }
         }
 
-        //panic!();
+        panic!();
         Ok(())
     }
 }
