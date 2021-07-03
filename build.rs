@@ -37,7 +37,7 @@ fn generate_indicator_modules(meta: &Meta) -> TokenStream {
                 use rustta_bindgen::meta::func_handle::FuncHandle;
                 use rustta_bindgen::meta::params::param_holder::{
                     Open, Low, High, Close, Volume, OpenInterest, ParamHolder,
-                    OptInputParam, InputParam, OutputParam, Ohlc, Length
+                    OptInputParam, InputParam, OutputParam, Ohlc, Length, wrap_output
                 };
 
                 #(#func_structs)*
@@ -121,7 +121,6 @@ fn generate_indicator_calculate_func(indicator: &FuncInfo) -> TokenStream {
             #input_length
             let output_size = params.required_output_size(0, input_len)
                 .ok_or("Failed to get required size")?;
-            dbg!(output_size);
 
             #(#output_params)*
 
@@ -158,39 +157,39 @@ fn generate_input_params(indicator: &FuncInfo) -> Vec<TokenStream> {
         let input_ident = format_ident!("{}", rustify_input(input.name()));
 
         let input_value = match input.param_type() {
-            InputType::Integer | InputType::Real => quote! { #input_ident.as_ref() },
+            InputType::Integer | InputType::Real => quote! { #input_ident.as_ref().as_ptr() },
             InputType::Price => {
                 let flags = input.flags();
 
                 let open = if flags.contains(InputFlags::OPEN) {
-                    quote! { #input_ident.open() }
+                    quote! { #input_ident.open().as_ptr() }
                 } else {
-                    quote! { &[] }
+                    quote! { std::ptr::null() }
                 };
                 let low = if flags.contains(InputFlags::LOW) {
-                    quote! { #input_ident.low() }
+                    quote! { #input_ident.low().as_ptr() }
                 } else {
-                    quote! { &[] }
+                    quote! { std::ptr::null() }
                 };
                 let high = if flags.contains(InputFlags::HIGH) {
-                    quote! { #input_ident.high() }
+                    quote! { #input_ident.high().as_ptr() }
                 } else {
-                    quote! { &[] }
+                    quote! { std::ptr::null() }
                 };
                 let close = if flags.contains(InputFlags::CLOSE) {
-                    quote! { #input_ident.close() }
+                    quote! { #input_ident.close().as_ptr() }
                 } else {
-                    quote! { &[] }
+                    quote! { std::ptr::null() }
                 };
                 let volume = if flags.contains(InputFlags::VOLUME) {
-                    quote! { #input_ident.volume() }
+                    quote! { #input_ident.volume().as_ptr() }
                 } else {
-                    quote! { &[] }
+                    quote! { std::ptr::null() }
                 };
                 let open_interest = if flags.contains(InputFlags::OPEN_INTEREST) {
                     quote! { #input_ident.open_interest() }
                 } else {
-                    quote! { &[] }
+                    quote! { std::ptr::null()  }
                 };
 
                 quote! {
@@ -233,9 +232,10 @@ fn generate_output_params(indicator: &FuncInfo) -> Vec<TokenStream> {
         };
 
         outputs.push(quote! {
-            let mut #output_ident = vec![#output_vec_init; output_size];
+            let #output_ident = vec![#output_vec_init; output_size];
+            let mut #output_ident = std::mem::ManuallyDrop::new(#output_ident);
 
-            params.set_output(#position, OutputParam::#output_type_ident(&mut #output_ident))?;
+            params.set_output(#position, OutputParam::#output_type_ident(#output_ident.as_mut_ptr()))?;
         })
     }
 
@@ -295,7 +295,7 @@ fn generate_call_and_return(indicator: &FuncInfo) -> TokenStream {
 
     for output in indicator.outputs() {
         let output_ident = format_ident!("{}", rustify_input(output.name()));
-        outputs.push(quote! { #output_ident })
+        outputs.push(quote! { wrap_output(#output_ident.as_mut_ptr(), num_elements) })
     }
 
     // More than one output wrap in tuple
@@ -306,7 +306,7 @@ fn generate_call_and_return(indicator: &FuncInfo) -> TokenStream {
     };
 
     quote! {
-        params.call(0, end_idx)?;
+        let (_begin_index, num_elements) = params.call(0, end_idx)?;
         #return_expr
     }
 }

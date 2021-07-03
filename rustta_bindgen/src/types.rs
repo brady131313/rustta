@@ -9,6 +9,7 @@ pub enum TaError {
     BadParam,
     FuncNotFound(String),
     Misc(String),
+    NotEnoughBars,
 }
 
 impl fmt::Display for TaError {
@@ -18,6 +19,7 @@ impl fmt::Display for TaError {
             TaError::BadParam => write!(f, "Bad param"),
             TaError::FuncNotFound(e) => write!(f, "Function with name {} not found", e),
             TaError::Misc(e) => write!(f, "Misc error: {}", e),
+            TaError::NotEnoughBars => write!(f, "Not enough bars for given start and end"),
         }
     }
 }

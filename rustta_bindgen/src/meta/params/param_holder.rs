@@ -48,6 +48,12 @@ impl<T> Length for &[T] {
     }
 }
 
+impl<T> Length for Vec<T> {
+    fn length(&self) -> usize {
+        self.len()
+    }
+}
+
 impl Length for (&[f64], &[f64], &[f64], &[f64], &[f64], &[f64]) {
     fn length(&self) -> usize {
         max!(
@@ -97,19 +103,19 @@ impl OpenInterest for (&[f64], &[f64], &[f64], &[f64], &[f64], &[f64]) {
     }
 }
 
-pub struct Ohlc<'a> {
-    pub open: &'a [f64],
-    pub low: &'a [f64],
-    pub high: &'a [f64],
-    pub close: &'a [f64],
-    pub volume: &'a [f64],
-    pub openinterest: &'a [f64],
+pub struct Ohlc {
+    pub open: *const f64,
+    pub low: *const f64,
+    pub high: *const f64,
+    pub close: *const f64,
+    pub volume: *const f64,
+    pub openinterest: *const f64,
 }
 
-pub enum InputParam<'a> {
-    Real(&'a [f64]),
-    Integer(&'a [i32]),
-    Ohlc(Ohlc<'a>),
+pub enum InputParam {
+    Real(*const f64),
+    Integer(*const i32),
+    Ohlc(Ohlc),
 }
 
 pub enum OptInputParam {
@@ -117,9 +123,9 @@ pub enum OptInputParam {
     Integer(i32),
 }
 
-pub enum OutputParam<'a> {
-    Real(&'a mut [f64]),
-    Integer(&'a mut [i32]),
+pub enum OutputParam {
+    Real(*mut f64),
+    Integer(*mut i32),
 }
 
 pub struct ParamHolder(*mut TA_ParamHolder);
@@ -129,22 +135,18 @@ impl ParamHolder {
         let position = position as u32;
 
         let ret_code = match param {
-            InputParam::Real(xs) => unsafe {
-                TA_SetInputParamRealPtr(self.0, position, xs.as_ptr())
-            },
-            InputParam::Integer(xs) => unsafe {
-                TA_SetInputParamIntegerPtr(self.0, position, xs.as_ptr())
-            },
+            InputParam::Real(xs) => unsafe { TA_SetInputParamRealPtr(self.0, position, xs) },
+            InputParam::Integer(xs) => unsafe { TA_SetInputParamIntegerPtr(self.0, position, xs) },
             InputParam::Ohlc(ohlc) => unsafe {
                 TA_SetInputParamPricePtr(
                     self.0,
                     position,
-                    ohlc.open.as_ptr(),
-                    ohlc.high.as_ptr(),
-                    ohlc.low.as_ptr(),
-                    ohlc.close.as_ptr(),
-                    ohlc.volume.as_ptr(),
-                    ohlc.openinterest.as_ptr(),
+                    ohlc.open,
+                    ohlc.high,
+                    ohlc.low,
+                    ohlc.close,
+                    ohlc.volume,
+                    ohlc.openinterest,
                 )
             },
         };
@@ -177,11 +179,9 @@ impl ParamHolder {
         let position = position as u32;
 
         let ret_code = match param {
-            OutputParam::Real(xs) => unsafe {
-                TA_SetOutputParamRealPtr(self.0, position, xs.as_mut_ptr())
-            },
+            OutputParam::Real(xs) => unsafe { TA_SetOutputParamRealPtr(self.0, position, xs) },
             OutputParam::Integer(xs) => unsafe {
-                TA_SetOutputParamIntegerPtr(self.0, position, xs.as_mut_ptr())
+                TA_SetOutputParamIntegerPtr(self.0, position, xs)
             },
         };
 
@@ -215,18 +215,23 @@ impl ParamHolder {
         if temp > end {
             Some(0)
         } else {
-            Some(end - temp)
+            Some(end - temp + 1)
         }
     }
 
-    pub fn call(&self, start: i32, end: i32) -> TaResult<()> {
+    pub fn call(&self, start: i32, end: i32) -> TaResult<(usize, usize)> {
         let begin_idx_ptr: *mut i32 = &mut 0;
         let num_elements_ptr: *mut i32 = &mut 0;
 
         let ret_code = unsafe { TA_CallFunc(self.0, start, end, begin_idx_ptr, num_elements_ptr) };
 
         match ret_code {
-            TA_RetCode::TA_SUCCESS => Ok(()),
+            TA_RetCode::TA_SUCCESS => {
+                let begin_idx = unsafe { *begin_idx_ptr } as usize;
+                let num_elements = unsafe { *num_elements_ptr } as usize;
+
+                Ok((begin_idx, num_elements))
+            }
             _ => Err(TaError::Misc("Error calling func".into())),
         }
     }
@@ -253,9 +258,14 @@ impl Drop for ParamHolder {
     }
 }
 
+pub fn wrap_output<T>(ptr: *mut T, num_elements: usize) -> Vec<T> {
+    let output = unsafe { Vec::from_raw_parts(ptr, num_elements, num_elements) };
+    output
+}
+
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
+    use std::{convert::TryInto, error::Error};
 
     use super::*;
 
@@ -272,12 +282,13 @@ mod tests {
     fn test_can_set_input_param() -> Result<(), Box<dyn Error>> {
         let handle = FuncHandle::try_from("BBANDS")?;
         let mut param_holder = ParamHolder::try_from(handle)?;
+        let data = [1.0, 2.0, 3.0];
 
-        let result = param_holder.set_input(0, InputParam::Real(&[1.0, 2.0, 3.0]));
+        let result = param_holder.set_input(0, InputParam::Real(data.as_ptr()));
         assert!(result.is_ok());
 
         // Cant set invalid param
-        let result = param_holder.set_input(1, InputParam::Real(&[1.0, 2.0, 3.0]));
+        let result = param_holder.set_input(1, InputParam::Real(data.as_ptr()));
         assert!(result.is_err());
 
         Ok(())
@@ -302,14 +313,13 @@ mod tests {
     fn test_can_set_output_param() -> Result<(), Box<dyn Error>> {
         let handle = FuncHandle::try_from("TYPPRICE")?;
         let mut param_holder = ParamHolder::try_from(handle)?;
-
         let mut data = vec![1.0, 2.0, 3.0];
 
-        let result = param_holder.set_output(0, OutputParam::Real(&mut data));
+        let result = param_holder.set_output(0, OutputParam::Real(data.as_mut_ptr()));
         assert!(result.is_ok());
 
         // Cant set invalid param
-        let result = param_holder.set_output(1, OutputParam::Real(&mut data));
+        let result = param_holder.set_output(1, OutputParam::Real(data.as_mut_ptr()));
         assert!(result.is_err());
 
         Ok(())
@@ -325,6 +335,18 @@ mod tests {
 
         param_holder.set_param(0, OptInputParam::Integer(5))?;
         assert_eq!(param_holder.lookback().unwrap(), 4);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_required_output_size() -> Result<(), Box<dyn Error>> {
+        let handle = FuncHandle::try_from("SMA")?;
+        let mut param_holder = ParamHolder::try_from(handle)?;
+
+        // Default SMA period is 30
+        // Assuming 100 bars
+        assert_eq!(param_holder.required_output_size(0, 99).unwrap(), 71);
 
         Ok(())
     }

@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 rustta_bindgen = { path = "rustta_bindgen" }
 derive_builder = "0.10.2"
+approx = "0.3.2"
 
 [build-dependencies]
 rustta_bindgen = { path = "rustta_bindgen" }
