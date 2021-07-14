@@ -12,6 +12,7 @@ mod tests {
     use std::error::Error;
 
     use super::indicators::overlap_studies::*;
+    use super::indicators::price_transform::*;
 
     mod real_input_indicator {
         use super::*;
@@ -42,11 +43,23 @@ mod tests {
     }
 
     mod price_input_indicator {
+        use crate::input::Ohlcv;
+
         use super::*;
 
         #[test]
         fn accepts_data() -> Result<(), Box<dyn Error>> {
-            let midprice = MidPriceBuilder::default().time_period(5).build()?;
+            let typprice = TypPriceBuilder::default().build()?;
+            let expected = vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
+
+            let data = Ohlcv {
+                high: &[3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0],
+                close: &[2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                low: &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+                ..Ohlcv::default()
+            };
+            let output = typprice.calculate(data)?;
+            assert_relative_eq!(output.as_slice(), expected.as_slice());
 
             Ok(())
         }

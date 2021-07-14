@@ -52,16 +52,20 @@ mod tests {
     fn test_meta() -> Result<(), Box<dyn Error>> {
         let meta = Meta::new()?;
 
-        for (_group, indicators) in meta.data.iter() {
+        for (group, indicators) in meta.data.iter() {
             for indicator in indicators.iter() {
-                for output in indicator.outputs() {
-                    if output.param_type() != OutputType::Real {
-                        println!("{:#?}", indicator);
+                let mut print = false;
+                for input in indicator.inputs() {
+                    if input.param_type() == InputType::Price {
+                        print = true;
                     }
+                }
+
+                if print && group == "Math Operators" {
+                    println!("{:#?}", indicator);
                 }
             }
         }
-        //panic!();
         Ok(())
     }
 }

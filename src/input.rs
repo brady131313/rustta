@@ -73,3 +73,61 @@ impl Volume for (&[f64], &[f64], &[f64], &[f64], &[f64]) {
         self.4
     }
 }
+
+pub struct Ohlcv<'a> {
+    pub open: &'a [f64],
+    pub high: &'a [f64],
+    pub low: &'a [f64],
+    pub close: &'a [f64],
+    pub volume: &'a [f64],
+}
+
+impl<'a> Default for Ohlcv<'a> {
+    fn default() -> Self {
+        Self {
+            open: &[],
+            high: &[],
+            low: &[],
+            close: &[],
+            volume: &[],
+        }
+    }
+}
+
+impl<'a> Length for Ohlcv<'a> {
+    fn length(&self) -> usize {
+        max!(
+            self.open.len(),
+            self.high.len(),
+            self.low.len(),
+            self.close.len(),
+            self.volume.len()
+        )
+    }
+}
+
+impl<'a> Open for Ohlcv<'a> {
+    fn open(&self) -> &[f64] {
+        self.open
+    }
+}
+impl<'a> High for Ohlcv<'a> {
+    fn high(&self) -> &[f64] {
+        self.high
+    }
+}
+impl<'a> Low for Ohlcv<'a> {
+    fn low(&self) -> &[f64] {
+        self.low
+    }
+}
+impl<'a> Close for Ohlcv<'a> {
+    fn close(&self) -> &[f64] {
+        self.close
+    }
+}
+impl<'a> Volume for Ohlcv<'a> {
+    fn volume(&self) -> &[f64] {
+        self.volume
+    }
+}
