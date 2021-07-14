@@ -1,33 +1,11 @@
 #[macro_use]
 extern crate derive_builder;
 
-#[macro_use]
+#[cfg_attr(test, macro_use)]
 extern crate approx;
 
-macro_rules! max {
-    ($x:expr) => ( $x );
-    ($x:expr, $($xs:expr),+) => {
-        {
-            use std::cmp::max;
-            max($x, max!( $($xs),+ ))
-        }
-    };
-}
-
-macro_rules! min {
-    ($x:expr) => ( $x );
-    ($x:expr, $($xs:expr),+) => {
-        {
-            use std::cmp::min;
-            min($x, min!( $($xs),+ ))
-        }
-    };
-}
-
-#[allow(dead_code)]
-pub mod indicators {
-    include!(concat!(env!("OUT_DIR"), "/indicators.rs"));
-}
+pub mod indicators;
+pub mod input;
 
 #[cfg(test)]
 mod tests {
@@ -61,18 +39,16 @@ mod tests {
 
             Ok(())
         }
-
-        #[test]
-        fn accepts_arr() -> Result<(), Box<dyn Error>> {
-            // Can't be generic over fixed length arrays until const generics are stable
-            Ok(())
-        }
     }
 
     mod price_input_indicator {
         use super::*;
 
         #[test]
-        fn accepts
+        fn accepts_data() -> Result<(), Box<dyn Error>> {
+            let midprice = MidPriceBuilder::default().time_period(5).build()?;
+
+            Ok(())
+        }
     }
 }

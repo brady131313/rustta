@@ -33,12 +33,14 @@ fn generate_indicator_modules(meta: &Meta) -> TokenStream {
         let group_ident = format_ident!("{}", rustify_name(group));
         group_modules.push(quote! {
             pub mod #group_ident {
+                #![allow(unused_imports)]
+
                 use std::{ffi::CString, error::Error, convert::TryFrom};
                 use rustta_bindgen::meta::func_handle::FuncHandle;
                 use rustta_bindgen::meta::params::param_holder::{
-                    Open, Low, High, Close, Volume, OpenInterest, ParamHolder,
-                    OptInputParam, InputParam, OutputParam, Ohlc, Length, wrap_output
+                    ParamHolder, OptInputParam, InputParam, OutputParam, Ohlc, wrap_output
                 };
+                use crate::input::{Open, Low, High, Close, Volume, Length};
 
                 #(#func_structs)*
             }
