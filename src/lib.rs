@@ -58,7 +58,7 @@ mod tests {
                 low: &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
                 ..Ohlcv::default()
             };
-            let output = typprice.calculate(data)?;
+            let output = typprice.calculate(&data)?;
             assert_relative_eq!(output.as_slice(), expected.as_slice());
 
             Ok(())

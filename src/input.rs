@@ -94,7 +94,7 @@ impl<'a> Default for Ohlcv<'a> {
     }
 }
 
-impl<'a> Length for Ohlcv<'a> {
+impl<'a> Length for &Ohlcv<'a> {
     fn length(&self) -> usize {
         max!(
             self.open.len(),
@@ -106,27 +106,27 @@ impl<'a> Length for Ohlcv<'a> {
     }
 }
 
-impl<'a> Open for Ohlcv<'a> {
+impl<'a> Open for &Ohlcv<'a> {
     fn open(&self) -> &[f64] {
         self.open
     }
 }
-impl<'a> High for Ohlcv<'a> {
+impl<'a> High for &Ohlcv<'a> {
     fn high(&self) -> &[f64] {
         self.high
     }
 }
-impl<'a> Low for Ohlcv<'a> {
+impl<'a> Low for &Ohlcv<'a> {
     fn low(&self) -> &[f64] {
         self.low
     }
 }
-impl<'a> Close for Ohlcv<'a> {
+impl<'a> Close for &Ohlcv<'a> {
     fn close(&self) -> &[f64] {
         self.close
     }
 }
-impl<'a> Volume for Ohlcv<'a> {
+impl<'a> Volume for &Ohlcv<'a> {
     fn volume(&self) -> &[f64] {
         self.volume
     }
